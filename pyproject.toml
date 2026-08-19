@@ -36,6 +36,14 @@ dependencies = [
 # The TUI is the headline feature but not every install needs it: CI runs the
 # harness and the export commands, which are pure Rich.
 tui = ["textual>=0.79"]
+# Local scanning. A separate program joined by a versioned contract, not an
+# import — `lory scan` works with any scanner speaking a contract this version
+# understands, and everything else here works without it installed at all.
+#
+# Deliberately absent from `dev`: the scan tests stub the subprocess boundary,
+# so CI needs no scanner, and requiring one would couple this package's build
+# to the release cadence of another.
+scan = ["lory-code-security-scanner>=0.1"]
 dev = [
     "textual>=0.79",
     "pytest>=8.0",

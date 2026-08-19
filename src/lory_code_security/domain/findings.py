@@ -323,6 +323,30 @@ class FindingStore:
         self.save_cache()
         return sort_findings(findings)
 
+    def ingest(self, rows: list[dict[str, Any]], source: str = "scan") -> list[Finding]:
+        """Load findings produced locally, replacing the previous local set.
+
+        Used by ``lory scan``. Findings from a local scanner are wholesale
+        replaced rather than merged: one that no longer matches has been fixed,
+        and leaving it in the cache would report work that is already done.
+        Findings from every other store are untouched, so a local scan never
+        makes the platform's findings disappear from the cockpit.
+        """
+        findings = [Finding.from_row(row) for row in rows]
+        replacing = {f.store or _store_of(f.key) for f in findings} or {source}
+
+        self._by_key = {
+            key: finding
+            for key, finding in self._by_key.items()
+            if (finding.store or _store_of(key)) not in replacing
+        }
+        for finding in findings:
+            self._by_key[finding.key] = finding
+
+        self.last_source = source
+        self.save_cache()
+        return sort_findings(findings)
+
     def resolve(self, selector: str) -> Finding:
         """Find one cached finding from what the user typed.
 
@@ -621,6 +645,15 @@ def cwe_number(cwe_id: str) -> str:
     """``CWE-89`` → ``89``. Returns '' when there is no usable id."""
     match = re.search(r"(\d+)", cwe_id or "")
     return match.group(1) if match else ""
+
+
+def _store_of(key: str) -> str:
+    """The store a ref belongs to, read back off the key itself.
+
+    Refs are ``<store>-<id>``. A finding cached by an older version may have no
+    ``store`` field, and it still has to be replaceable by a rescan.
+    """
+    return key.rsplit("-", 1)[0] if "-" in key else ""
 
 
 def _as_id(selector: str) -> int | None:

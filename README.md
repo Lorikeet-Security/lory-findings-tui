@@ -17,9 +17,15 @@ A terminal cockpit for the findings on your [Lorikeet Security](https://lorikeet
 account. Pull them down from the portal, find the code responsible, ask **Lory**
 how to fix it, and request a retest — without leaving the repo you are fixing.
 
-> **This tool does not scan anything.** Findings are produced by Lory's pentest
-> engine and by Lorikeet's testers, reviewed by a human, and published to your
-> portal. `lory-code-security` reads them and helps you close them.
+> **This tool finds nothing on its own.** Findings are produced by Lory's
+> pentest engine and by Lorikeet's testers, reviewed by a human, and published
+> to your portal. `lory-code-security` reads them and helps you close them.
+>
+> For findings of your own, `lory scan` hands the job to
+> [`lory-scan`](https://github.com/Lorikeet-Security/lory-code-security-scanner)
+> — a local static scanner that runs on this machine, needs no token, and makes
+> no network calls — and loads what it finds into the same cockpit, alongside
+> the findings from your account.
 
 ---
 
@@ -38,6 +44,7 @@ how to fix it, and request a retest — without leaving the repo you are fixing.
 - [Install](#install)
 - [Setup](#setup)
 - [The cockpit](#the-cockpit)
+- [Scanning your own code](#scanning-your-own-code)
 - [Command reference](#command-reference)
 - [Tracing a finding to your code](#tracing-a-finding-to-your-code)
 - [SARIF and CI](#sarif-and-ci)
@@ -214,9 +221,16 @@ works without the TUI extra installed.
 # With the cockpit (recommended)
 pip install "lory-code-security[tui]"
 
+# With the cockpit and the local scanner
+pip install "lory-code-security[tui,scan]"
+
 # CLI and harness only — enough for CI
 pip install lory-code-security
 ```
+
+The scanner is a separate package, so `lory scan` also works if you install
+[`lory-code-security-scanner`](https://github.com/Lorikeet-Security/lory-code-security-scanner)
+yourself; nothing here depends on it being present.
 
 From source:
 
@@ -308,6 +322,7 @@ lory tui
 | `m` | Mark fixed locally (toggles) |
 | `R` | Request a retest from the Lorikeet team (confirmed) |
 | `r` | Refresh from the platform |
+| `s` | **Scan** — run `lory-scan` over the repo and load what it finds |
 | `q` | Quit |
 
 Network calls run in background workers, so the UI never blocks on the platform.
@@ -337,6 +352,7 @@ the status bar rather than taking the cockpit down.
 lory init                      Set up from the portal, or import an existing config
 lory doctor                    Check config, connectivity, scopes, repo detection
 lory tui                       Open the cockpit
+lory scan                      Scan this repository locally with lory-scan
 
 lory findings list             List findings, most severe first
 lory findings show <ref>       Full body of one finding
@@ -376,6 +392,64 @@ lory fix 41 --code
 lory triage 41 fixed
 lory retest 41 --note "Switched to bound parameters in reports.py"
 ```
+
+---
+
+## Scanning your own code
+
+The findings on your account come from a real engagement — a human tested your
+application and wrote them up. That is the highest-signal source there is, and
+it arrives on the cadence of an engagement.
+
+Between engagements, `lory scan` finds what a static scanner can:
+
+```bash
+pip install lory-code-security-scanner
+
+lory scan                      # scan the repo in your config's repo_root
+lory scan src --severity high  # one subtree, serious findings only
+lory scan --diff origin/main   # only what this branch changed
+```
+
+Scanned findings land in the same cockpit as everything else, so the whole
+workflow applies to them:
+
+```bash
+lory tui --cached              # triage them, or press `s` in the cockpit to rescan
+lory findings show scan-a1b2c3d4e5
+lory trace scan-a1b2c3d4e5     # the finding already knows the file and line
+lory fix scan-a1b2c3d4e5       # ask Lory for the change
+```
+
+**No account required.** Scanning needs no token and makes no network call, and
+neither does reading what it found. `lory init` is only needed for the findings
+that come from your Lorikeet engagements. `lory doctor` reports both sources
+separately.
+
+**The two sources coexist.** A local scan replaces the previous local scan —
+a finding that no longer matches has been fixed — and leaves findings from
+every other store untouched. Refs cannot collide: scanner findings are named
+`scan-<fingerprint>`, in their own store.
+
+**How they differ, and why it matters when you read them:**
+
+| | Platform findings | Scanned findings |
+|---|---|---|
+| Produced by | Lory's engine and Lorikeet's testers | pattern rules, locally |
+| Reviewed by a human | yes | no |
+| Reachability | demonstrated | not established |
+| Says where | an asset and a request | a file and a line |
+| Retestable | yes, via `lory retest` | no — rescan instead |
+
+A scanned finding is a lead, and its confidence field says how strong a one.
+A platform finding is a result. The cockpit shows both because you fix them in
+the same place, not because they carry the same weight.
+
+**Under the hood**, the two programs are joined by a versioned contract rather
+than an import: `lory scan` runs `lory-scan describe`, checks the contract
+version it reports, and then asks for findings in this tool's own row format.
+Neither package depends on the other, either can be installed alone, and a
+scanner too new to read is named as such instead of being misparsed.
 
 ---
 
@@ -543,6 +617,16 @@ Credentials at rest: `config.yml` holds the bearer token. `lory init` creates it
 mode `0600`, `lory doctor` warns if the permissions drift, and it is in
 `.gitignore`. Prefer `${LORY_MCP_TOKEN}` and environment variables in shared or
 CI environments.
+
+**Scanning sends nothing at all.** `lory scan` runs a local program over local
+files: no account, no token, no network. The findings it produces are written
+to `.lory_state/` on this machine. They are only sent anywhere if you then ask
+Lory to fix one — and then under the same rules as any other finding, with
+source attached only if you asked for it.
+
+Treat `.lory_state/` the way you treat the repository: a findings file quotes
+the lines it was found on. The scanner masks credential *values* in its output,
+but the surrounding code is reproduced as-is.
 
 ---
 

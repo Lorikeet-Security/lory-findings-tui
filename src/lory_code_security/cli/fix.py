@@ -35,7 +35,10 @@ def fix(
     from lory_code_security.domain import codebase, remediate
 
     cfg = load_config(config_path)
-    store = open_store(cfg)
+    # Offline-tolerant: Lory's chat endpoint needs no credential of its own,
+    # and a scanned finding carries its whole body, so asking for a fix works
+    # without a platform token.
+    store = open_store(cfg, allow_offline=True)
     store.load_cache()
 
     try:

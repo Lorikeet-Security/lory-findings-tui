@@ -96,7 +96,11 @@ def findings_list(
 def findings_show(finding: str, config_path: str, as_json: bool) -> None:
     """Show the full body of one finding. FINDING is a ref or an id."""
     cfg = load_config(config_path)
-    store = open_store(cfg)
+    # Offline-tolerant: a finding produced by `lory scan` is complete on disk
+    # and needs no platform call, so requiring a token here would lock a
+    # scanner-only user out of their own findings. With a token configured
+    # nothing changes — the platform is still consulted for the full body.
+    store = open_store(cfg, allow_offline=True)
     store.load_cache()
 
     try:
@@ -165,7 +169,11 @@ def trace(finding_ref: str, config_path: str, limit: int, context: int) -> None:
     from lory_code_security.domain import codebase
 
     cfg = load_config(config_path)
-    store = open_store(cfg)
+    # Offline-tolerant: a finding produced by `lory scan` is complete on disk
+    # and needs no platform call, so requiring a token here would lock a
+    # scanner-only user out of their own findings. With a token configured
+    # nothing changes — the platform is still consulted for the full body.
+    store = open_store(cfg, allow_offline=True)
     store.load_cache()
 
     try:

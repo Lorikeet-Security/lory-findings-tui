@@ -46,9 +46,16 @@ from lory_code_security.domain.findings import (
 )
 from lory_code_security.ui import render
 
+
 #: Shown when an action needs a finding and the table has none highlighted —
 #: an empty filter result, or an account with nothing on it. Silence there read
 #: as a dead key.
+def _one_line(exc: Exception) -> str:
+    """First line of an error, for a one-line status bar."""
+    text = str(exc).strip()
+    return text.splitlines()[0] if text else exc.__class__.__name__
+
+
 _NO_SELECTION = "no finding selected"
 
 SEVERITY_COLOURS = {
@@ -96,6 +103,7 @@ class LoryApp(App[None]):
     BINDINGS = [
         Binding("q,ctrl+c", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
+        Binding("s", "scan_code", "Scan code"),
         Binding("slash", "focus_filter", "Filter"),
         Binding("f", "ask_lory", "Fix with Lory"),
         Binding("t", "trace_code", "Trace code"),
@@ -441,6 +449,35 @@ class LoryApp(App[None]):
 
     def action_refresh(self) -> None:
         self.load_findings(refresh=True)
+
+    def action_scan_code(self) -> None:
+        """Scan the working tree with lory-scan, without leaving the cockpit."""
+        self.set_status(f"scanning {self.cfg.repo_root}…")
+        self.scan_worker()
+
+    @work(thread=True, exclusive=True, group="scan")
+    def scan_worker(self) -> None:
+        from lory_code_security.cli.common import open_store
+        from lory_code_security.domain import scan as scanner
+
+        if self.store is None:
+            self.store = open_store(self.cfg, allow_offline=True)
+            self.store.load_cache()
+
+        try:
+            rows = scanner.run(self.cfg.repo_root)
+        except LoryConsoleError as exc:
+            # A scan that cannot run must not clear the findings already on
+            # screen — say why in the status bar and leave the view alone.
+            self.call_from_thread(self.set_status, f"scan failed: {_one_line(exc)}")
+            return
+
+        found = self.store.ingest(rows)
+        self.call_from_thread(self.set_findings, self.store.all(), "local scan")
+        self.call_from_thread(
+            self.set_status,
+            f"{len(found)} findings from the local scan of {self.cfg.repo_root}",
+        )
 
     def action_focus_filter(self) -> None:
         self.query_one("#filter", Input).focus()

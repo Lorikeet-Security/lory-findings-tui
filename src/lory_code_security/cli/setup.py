@@ -147,9 +147,23 @@ def doctor(config_path: str) -> None:
     if not (cfg.repo_root / ".git").exists():
         console.print("[dim]  Not a git repo; code search falls back to a filesystem walk.[/dim]")
 
+    scanner_ok = _report_scanner()
+
     if not cfg.has_mcp():
-        console.print("[red]✗[/red] No mcp_token — findings are unavailable. Run: lory init")
-        ok = False
+        # Not fatal when the scanner is installed: `lory scan` is a complete
+        # source of findings on its own, and telling a scanner-only user they
+        # are "not ready" would be wrong.
+        if scanner_ok:
+            console.print(
+                "[yellow]![/yellow] No mcp_token — platform findings are unavailable, "
+                "but `lory scan` works. Run `lory init` to add your account."
+            )
+        else:
+            console.print(
+                "[red]✗[/red] No mcp_token and no local scanner — there is no source "
+                "of findings. Run `lory init`, or install lory-code-security-scanner."
+            )
+            ok = False
     else:
         try:
             client = McpClient(cfg)
@@ -197,6 +211,25 @@ def doctor(config_path: str) -> None:
     )
     console.print(f"\n[bold {'green' if ok else 'red'}]{'Ready.' if ok else 'Not ready.'}[/]")
     sys.exit(0 if ok else 1)
+
+
+def _report_scanner() -> bool:
+    """Whether local scanning is available, and say why not if it is not."""
+    from lory_code_security.domain import scan as scanner
+
+    try:
+        info = scanner.describe()
+    except LoryConsoleError as exc:
+        console.print(f"[yellow]![/yellow] Local scanning unavailable: {_one_line(exc)}")
+        console.print("[dim]  pip install lory-code-security-scanner[/dim]")
+        return False
+
+    console.print(f"[green]✓[/green] Local scanning: {info.summary()} — `lory scan`")
+    return True
+
+
+def _one_line(exc: Exception) -> str:
+    return str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────

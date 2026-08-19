@@ -10,6 +10,7 @@ from lory_code_security.cli.findings import findings, retest, trace, triage
 from lory_code_security.cli.fix import fix
 from lory_code_security.cli.harness import harness
 from lory_code_security.cli.mcp import mcp
+from lory_code_security.cli.scan import scan
 from lory_code_security.cli.setup import doctor, init
 from lory_code_security.cli.tui import tui
 
@@ -23,8 +24,12 @@ def main() -> None:
     Findings are produced by Lory's pentest engine and by Lorikeet's testers,
     reviewed by a human, and published to your portal. This tool is the half
     that comes after: pull those findings down, locate the code responsible,
-    ask Lory how to fix it, and request a retest. It does not scan anything
-    itself.
+    ask Lory how to fix it, and request a retest.
+
+    It finds nothing on its own. For that, `lory scan` hands the job to
+    lory-scan — a local static scanner that runs on this machine, needs no
+    token, and makes no network calls — and loads what it finds into the same
+    cockpit, alongside the findings from your account.
 
     \b
     ──────────────────────────────────────────────────────────────────────────
@@ -35,12 +40,19 @@ def main() -> None:
       3.  lory tui             Open the findings cockpit.
 
     \b
+    Or, with no account at all:
+      1.  pip install lory-code-security-scanner
+      2.  lory scan             Scan this repository locally.
+      3.  lory tui --cached     Triage what it found.
+
+    \b
     ──────────────────────────────────────────────────────────────────────────
     COMMANDS
     ──────────────────────────────────────────────────────────────────────────
       init       Set up credentials from the portal, or import an existing one.
       doctor     Check config, connectivity, scopes, and repo detection.
       tui        Full-screen findings and remediation cockpit.
+      scan       Scan this repository locally with lory-scan.
       findings   list / show / export the findings on your account.
       trace      Show local source that may be responsible for a finding.
       fix        Ask Lory for a code-level fix for one finding.
@@ -84,6 +96,7 @@ main.add_command(triage)
 main.add_command(retest)
 main.add_command(ask)
 main.add_command(chat)
+main.add_command(scan)
 main.add_command(mcp)
 main.add_command(harness)
 
