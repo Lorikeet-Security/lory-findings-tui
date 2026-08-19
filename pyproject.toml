@@ -57,8 +57,8 @@ lory = "lory_code_security.cli.main:main"
 
 [project.urls]
 Homepage = "https://lorikeetsecurity.com"
-Repository = "https://github.com/Lorikeet-Security/lory-code-security"
-Issues = "https://github.com/Lorikeet-Security/lory-code-security/issues"
+Repository = "https://github.com/Lorikeet-Security/lory-findings-tui"
+Issues = "https://github.com/Lorikeet-Security/lory-findings-tui/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

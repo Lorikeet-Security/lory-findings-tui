@@ -232,11 +232,19 @@ The scanner is a separate package, so `lory scan` also works if you install
 [`lory-code-security-scanner`](https://github.com/Lorikeet-Security/lory-code-security-scanner)
 yourself; nothing here depends on it being present.
 
+From source, the pair sit side by side:
+
+```bash
+git clone https://github.com/Lorikeet-Security/lory-findings-tui.git
+git clone https://github.com/Lorikeet-Security/lory-code-security-scanner.git
+pip install -e "lory-findings-tui[tui,dev]" -e lory-code-security-scanner
+```
+
 From source:
 
 ```bash
-git clone https://github.com/Lorikeet-Security/lory-code-security.git
-cd lory-code-security
+git clone https://github.com/Lorikeet-Security/lory-findings-tui.git
+cd lory-findings-tui
 pip install -e ".[dev]"
 ```
 
