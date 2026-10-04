@@ -15,23 +15,66 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Run Lory Autonomous Pentest
+      - name: Extract PR Diff & Run Incremental Lory Security Gate
         run: |
+          # 1. Extract only modified files in PR diff to avoid full repo scans
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin ${{ github.base_ref }} --depth=1 || true
+            CHANGED_FILES_RAW=$(git diff --name-only origin/${{ github.base_ref }}...HEAD 2>/dev/null || git diff --name-only HEAD~1...HEAD 2>/dev/null || echo "")
+          else
+            CHANGED_FILES_RAW=$(git diff --name-only ${{ github.event.before }}...${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1...HEAD 2>/dev/null || echo "")
+          fi
+
+          CHANGED_FILES_JSON=$(echo "$CHANGED_FILES_RAW" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "Changed files in PR:"
+          echo "$CHANGED_FILES_RAW"
+
+          # 2. Extract only modified workflow files if any
+          WORKFLOW_FILES_JSON="{}"
+          for wf in $(echo "$CHANGED_FILES_RAW" | grep -E '^\.github/workflows/.*\.ya?ml$' || true); do
+            if [ -f "$wf" ]; then
+              CONTENT=$(cat "$wf" | jq -s -R .)
+              WORKFLOW_FILES_JSON=$(echo "$WORKFLOW_FILES_JSON" | jq --arg k "$wf" --argjson v "$CONTENT" '.[$k] = $v')
+            fi
+          done
+
+          # 3. Construct lightweight diff-only payload
+          PAYLOAD=$(jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg branch "${{ github.head_ref || github.ref_name }}" \
+            --arg sha "${{ github.sha }}" \
+            --arg pr "${{ github.event.pull_request.number }}" \
+            --arg pr_url "${{ github.event.pull_request.html_url }}" \
+            --argjson files "$CHANGED_FILES_JSON" \
+            --argjson wfs "$WORKFLOW_FILES_JSON" \
+            '{
+              repository: $repo,
+              branch: $branch,
+              commit_sha: $sha,
+              pr_number: (if $pr == "" then null else ($pr | tonumber) end),
+              pr_url: (if $pr_url == "" then null else $pr_url end),
+              fail_on: "high",
+              diff_only: true,
+              changed_files: $files,
+              workflow_files: $wfs
+            }')
+
+          # 4. Invoke Lory Incremental Security Gate
           curl -s -X POST https://lorikeetsecurity.com/talon/api/v1/pipeline/scan \
             -H "Authorization: Bearer ${{ secrets.LORY_PIPELINE_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "repository": "${{ github.repository }}",
-              "branch": "${{ github.head_ref || github.ref_name }}",
-              "commit_sha": "${{ github.sha }}",
-              "fail_on": "high"
-            }' > lory_output.json
+            -d "$PAYLOAD" > lory_output.json
 
           EXIT_CODE=$(jq -r '.exit_code // 0' lory_output.json)
+          SUMMARY_MSG=$(jq -r '.summary.message // .pr_comment // ""' lory_output.json)
+          echo "$SUMMARY_MSG"
+
           if [ "$EXIT_CODE" != "0" ]; then
             echo "[LORY GATE] Blocked: Security vulnerabilities detected exceeding threshold."
             cat lory_output.json
             exit 1
           fi
-          echo "[LORY GATE] Passed: No blocking vulnerabilities detected."
+          echo "[LORY GATE] Passed: Incremental PR security check cleared."
