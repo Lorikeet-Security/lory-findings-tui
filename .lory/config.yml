@@ -1,0 +1,23 @@
+# .lory/config.yml — Lorikeet Autonomous Security Pipeline Specification
+version: 1.0
+
+pipeline:
+  name: "lory findings repo"
+  target: "https://github:Lorikeet-Security/lory-findings-tui"
+  depth: surface
+
+gate:
+  fail_on: high
+  max_critical: 0
+  max_high: 0
+  break_build: true
+
+audit:
+  workflows: true
+  check_oidc: true
+  check_secrets: true
+
+reporting:
+  pr_comments: true
+  sarif_export: "lory-results.sarif"
+  retest_on_push: true

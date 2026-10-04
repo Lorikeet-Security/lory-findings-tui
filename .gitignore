@@ -1,6 +1,6 @@
 # Credentials. config.yml holds an MCP bearer token and a session cookie.
-config.yml
-config.yaml
+/config.yml
+/config.yaml
 *.local.yml
 
 # Local state: findings cache and your triage log.
