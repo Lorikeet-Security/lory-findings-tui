@@ -1,0 +1,37 @@
+name: Lory DevSecOps Gate
+
+on:
+  pull_request:
+    branches: [ main, staging ]
+
+jobs:
+  security-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Lory Autonomous Pentest
+        run: |
+          curl -s -X POST https://lorikeetsecurity.com/talon/api/v1/pipeline/scan \
+            -H "Authorization: Bearer ${{ secrets.LORY_PIPELINE_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "repository": "${{ github.repository }}",
+              "branch": "${{ github.head_ref || github.ref_name }}",
+              "commit_sha": "${{ github.sha }}",
+              "fail_on": "high"
+            }' > lory_output.json
+
+          EXIT_CODE=$(jq -r '.exit_code // 0' lory_output.json)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "[LORY GATE] Blocked: Security vulnerabilities detected exceeding threshold."
+            cat lory_output.json
+            exit 1
+          fi
+          echo "[LORY GATE] Passed: No blocking vulnerabilities detected."
